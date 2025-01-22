@@ -1,11 +1,11 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request
 from PyPDF2 import PdfReader
 import requests
 from bs4 import BeautifulSoup
 from transformers import pipeline
 
-# Initialize the summarization pipeline
-summarizer = pipeline("summarization")
+# Initialize the summarization pipeline with a specified model to avoid warnings
+summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
 app = Flask(__name__)
 
