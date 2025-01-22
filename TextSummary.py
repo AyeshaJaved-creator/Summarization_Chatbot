@@ -1,13 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify
 from PyPDF2 import PdfReader
-from transformers import pipeline
 import requests
 from bs4 import BeautifulSoup
-
-app = Flask(__name__)
+from transformers import pipeline
 
 # Initialize the summarization pipeline
 summarizer = pipeline("summarization")
+
+app = Flask(__name__)
 
 # Function to extract text from PDF files
 def extract_text_from_pdf(pdf_file):
@@ -23,42 +23,42 @@ def extract_text_from_url(url):
     soup = BeautifulSoup(response.content, 'html.parser')
     return ' '.join([p.get_text() for p in soup.find_all('p')])
 
-@app.route('/summarize', methods=['POST'])
-def summarize():
-    content = request.json
-    text = content.get("text")
-    max_length = content.get("max_length", 150)
-    min_length = content.get("min_length", 50)
-
-    if not text:
-        return jsonify({"error": "No text provided"}), 400
-
+# Function to summarize text
+def summarize_text(text, max_length=150):
     if len(text.split()) > max_length:
-        summary = summarizer(text, max_length=max_length, min_length=min_length, do_sample=False)[0]['summary_text']
-        return jsonify({"summary": summary})
+        return summarizer(text, max_length=max_length, min_length=50, do_sample=False)[0]['summary_text']
     else:
-        return jsonify({"error": "Text too short for summarization"}), 400
+        return "The text is too short for summarization."
 
-@app.route('/extract-pdf', methods=['POST'])
-def extract_pdf():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+# Flask Routes
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    summary = None
+    extracted_text = None
 
-    file = request.files['file']
-    text = extract_text_from_pdf(file)
-    return jsonify({"text": text})
+    if request.method == 'POST':
+        # Handle PDF or text file upload
+        uploaded_file = request.files.get('file')
+        url = request.form.get('url')
 
-@app.route('/extract-url', methods=['POST'])
-def extract_url():
-    url = request.json.get("url")
-    if not url:
-        return jsonify({"error": "No URL provided"}), 400
+        if uploaded_file:
+            if uploaded_file.filename.endswith(".pdf"):
+                extracted_text = extract_text_from_pdf(uploaded_file)
+            elif uploaded_file.filename.endswith(".txt"):
+                extracted_text = uploaded_file.read().decode("utf-8")
+            else:
+                extracted_text = "Unsupported file type."
 
-    try:
-        text = extract_text_from_url(url)
-        return jsonify({"text": text})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        elif url:
+            try:
+                extracted_text = extract_text_from_url(url)
+            except Exception as e:
+                extracted_text = f"Failed to extract text from the URL: {e}"
+
+        if extracted_text:
+            summary = summarize_text(extracted_text)
+
+    return render_template('index.html', summary=summary, extracted_text=extracted_text)
 
 if __name__ == "__main__":
     app.run(debug=True)
